@@ -1,0 +1,23 @@
+name: TEFAS Fon Güncelle
+
+on:
+  schedule:
+    - cron: '30 6 * * 1-5'  # Hafta içi her sabah 09:30 (UTC+3)
+  workflow_dispatch:          # Manuel çalıştırma butonu
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repo'yu çek
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Fon fiyatlarını güncelle
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+        run: python update_fon.py
