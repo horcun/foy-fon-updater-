@@ -1,9 +1,11 @@
 name: TEFAS Fon Güncelle
 
 on:
+  repository_dispatch:
+    types: [run-tefas]
   schedule:
-    - cron: '10 7 * * 1-5'  # Hafta içi her sabah 10:10 (UTC+3)
-  workflow_dispatch:          # Manuel çalıştırma butonu
+    - cron: '10 7 * * 1-5'
+  workflow_dispatch:
 
 jobs:
   update:
