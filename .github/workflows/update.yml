@@ -7,6 +7,19 @@ on:
     - cron: '10 7 * * 1-5'
   workflow_dispatch:
 
+# Arşiv dosyalarını depoya yazabilmek için gerekli. Tanımlı olmadığında
+# GITHUB_TOKEN depo ayarına göre salt-okunur olabilir ve push SESSİZCE
+# başarısız olur — yani arşiv hiç birikmez, kimse fark etmez.
+permissions:
+  contents: write
+
+# repository_dispatch (cron-job.org) ile schedule yakın zamanda tetiklenirse
+# iki çalışma çakışır ve push çakışması yaşanır. Sıraya alınır, iptal EDİLMEZ:
+# her çalışmanın kendi gününü arşive yazması gerekiyor.
+concurrency:
+  group: tefas-fon-guncelle
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -23,3 +36,27 @@ jobs:
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: python update_fon.py
+
+      # Bu adım Python'dan SONRA gelir. Başarısız olsa bile Gist güncellemesi
+      # çoktan yapılmış olur → kullanıcının günlük fiyatları etkilenmez.
+      # update_fon.py'deki hata izolasyonunun workflow tarafındaki karşılığı.
+      - name: Geçmiş arşivini commit'le
+        run: |
+          set -e
+          if [ ! -d gecmis ]; then
+            echo "gecmis/ üretilmemiş — commit edilecek bir şey yok."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gecmis
+          # Değişiklik yoksa (tatil günü, TEFAS boş döndü) HATA VERMEDEN çık.
+          # `git commit` değişiklik olmadığında 1 döner ve iş kırmızıya döner.
+          if git diff --cached --quiet; then
+            echo "Arşivde değişiklik yok — commit atlanıyor."
+            exit 0
+          fi
+          git commit -m "TEFAS geçmiş arşivi: $(date -u +%Y-%m-%d)"
+          # Eşzamanlı bir çalışma araya girdiyse rebase ile uzlaş, sonra it.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

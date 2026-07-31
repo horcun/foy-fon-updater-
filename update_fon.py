@@ -1,4 +1,5 @@
 import json
+import os
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -76,5 +77,59 @@ gist_req = urllib.request.Request(
 
 with urllib.request.urlopen(gist_req, timeout=15) as r:
     print(f"Gist güncellendi! Status: {r.status}")
+
+# ── 4. Bugünü GEÇMİŞ ARŞİVİNE ekle ───────────────────────
+# Sözleşme: FOY-FINANSAL-DAVRANIS-SOZLESMESI.md · K6.4–K6.7
+#
+# NEDEN: TEFAS fonlarının geçmiş NAV'ı hiçbir yerden çekilmiyordu. Grafik
+# motoru fiyatı olmayan günler için "son bilineni taşı" kuralını uyguluyor;
+# fonun elindeki tek fiyat BUGÜNKÜ fiyat olduğu için geçmişteki her gün
+# bugünün fiyatıyla değerleniyordu (30 Tem 2026'da sahada gözlendi).
+# Bugünden itibaren kendi arşivimizi biriktiriyoruz: kaynak bir gün şemasını
+# değiştirse bile elimizdeki geçmiş etkilenmez.
+#
+# ⚠️ İZOLASYON: Bu adım 1–3'ten SONRA ve AYRI hata kapsamında çalışır.
+# Arşiv yazımı bozulsa bile günlük fiyatlar Gist'e yazılmış olur; kullanıcının
+# bugünkü portföyü hiçbir koşulda etkilenmez.
+ARSIV_DIZIN = "gecmis"
+MAKS_GUN    = 1100   # ~3 yıl. Emniyet supabı: dosya sınırsız büyümesin.
+
+try:
+    bugun_anahtar = datetime.now().strftime("%Y-%m-%d")
+    simdi = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    os.makedirs(ARSIV_DIZIN, exist_ok=True)
+
+    yazilan = 0
+    for kod, _ad, fiyat in result:
+        yol = os.path.join(ARSIV_DIZIN, f"{kod}.json")
+
+        gunler = {}
+        if os.path.exists(yol):
+            try:
+                with open(yol, encoding="utf-8") as f:
+                    gunler = (json.load(f) or {}).get("daily", {}) or {}
+            except Exception:
+                # Bozuk dosya backfill'i durdurmaz; o fon bugünden yeniden başlar.
+                gunler = {}
+
+        gunler[bugun_anahtar] = fiyat
+        sirali = dict(sorted(gunler.items()))
+        if len(sirali) > MAKS_GUN:
+            sirali = dict(list(sirali.items())[-MAKS_GUN:])
+
+        with open(yol, "w", encoding="utf-8") as f:
+            json.dump({
+                "kod": kod,
+                # K6.7 — kapsamı verinin KENDİSİ ilan eder, tip değil.
+                "historyFrom": next(iter(sirali)),
+                "updatedAt": simdi,
+                "daily": sirali,
+            }, f, ensure_ascii=False, separators=(",", ":"))
+        yazilan += 1
+
+    print(f"Geçmiş arşivi güncellendi: {yazilan} fon → {ARSIV_DIZIN}/")
+except Exception as e:
+    # Bilinçli olarak yutulur: günlük fiyat akışı bundan ETKİLENMEMELİ.
+    print(f"UYARI — geçmiş arşivi güncellenemedi (günlük fiyatlar etkilenmedi): {e}")
 
 print("Tamamlandı.")
