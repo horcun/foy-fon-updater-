@@ -1,0 +1,64 @@
+name: Altın Sertifikası Arşivi
+
+# FÖY, Darphane altın sertifikasını (ALTINS1) Borsa İstanbul altında destekliyor.
+# Yahoo bu kağıdı tanımadığı için geçmiş seri bu deponun gecmis/ALTINS1.json
+# dosyasından okunur (fonlarla aynı biçim). Kural: update_sertifika.py başlığı.
+#
+# Yalnız canlı seansta anlamlı → 12:40 ve 16:40 TSİ (09:40 / 13:40 UTC).
+# İkinci koşu yedektir: ilki kaynak hatasına düşerse günü o yakalar; ilki
+# yazdıysa ikincisi hiçbir şeyi değiştirmez (gün bir kez yazılır).
+on:
+  schedule:
+    - cron: '40 9,13 * * 1-5'
+  workflow_dispatch:
+  # claude/** dalında betik değişince gerçek veriyle KURU koşu (yazmaz, raporlar).
+  push:
+    branches: ['claude/**']
+    paths: ['update_sertifika.py', 'test_sertifika.py', '.github/workflows/sertifika.yml']
+
+permissions:
+  contents: write
+
+# main'deki koşular TEFAS güncelleyicisiyle aynı kuyrukta (push çakışması olmasın).
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'tefas-fon-guncelle' || format('sertifika-{0}', github.ref) }}
+  cancel-in-progress: false
+
+jobs:
+  arsiv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repo'yu çek
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Kurallar (ağsız test)
+        run: python -m unittest test_sertifika -v
+
+      - name: Ölç ve arşive yaz
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            python update_sertifika.py
+          else
+            python update_sertifika.py --kuru
+          fi
+
+      - name: Arşivi commit'le
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -e
+          [ -f gecmis/ALTINS1.json ] || { echo "Arşiv dosyası yok — commit edilecek bir şey yok."; exit 0; }
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gecmis/ALTINS1.json
+          if git diff --cached --quiet; then
+            echo "Arşivde değişiklik yok — commit atlanıyor."
+            exit 0
+          fi
+          git commit -m "Altın sertifikası arşivi: $(date -u +%Y-%m-%d)"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
