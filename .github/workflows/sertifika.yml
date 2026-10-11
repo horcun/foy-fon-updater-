@@ -4,12 +4,23 @@ name: Altın Sertifikası Arşivi
 # Yahoo bu kağıdı tanımadığı için geçmiş seri bu deponun gecmis/ALTINS1.json
 # dosyasından okunur (fonlarla aynı biçim). Kural: update_sertifika.py başlığı.
 #
-# Yalnız canlı seansta anlamlı → 12:40 ve 16:40 TSİ (09:40 / 13:40 UTC).
-# İkinci koşu yedektir: ilki kaynak hatasına düşerse günü o yakalar; ilki
-# yazdıysa ikincisi hiçbir şeyi değiştirmez (gün bir kez yazılır).
+# Yalnız canlı seansta anlamlı (10:10–18:00 TSİ). Gün bir kez yazılır; sonraki
+# koşular hiçbir şeyi değiştirmez, yani fazladan koşu zararsızdır.
+#
+# 11 Eki 2026 — ARŞİV HİÇ YAZMADI: yalnız 12:40/16:40 TSİ zamanlayıcısı vardı.
+# 8 Eki'de koşu 19:24 UTC'ye (seans dışı) kaydı, 9 Eki'de hiç başlamadı →
+# "seans değil" deyip sessizce çıktı. GitHub zamanlayıcısı gecikebilir ya da
+# atlanabilir; seans penceresi dar olduğu için tek tetiğe güvenilmez. Üç katman:
+#   1) TEFAS güncelleyicisi bittiğinde (workflow_run) — onun 10:10 TSİ koşusu
+#      her iş günü dakikasında başlıyor (git log: 28 Eyl–9 Eki, hep 07:10 UTC).
+#   2) Seans boyunca saatte bir yedek (10:40–17:40 TSİ).
+#   3) Elle (workflow_dispatch).
 on:
+  workflow_run:
+    workflows: ['TEFAS Fon Güncelle']
+    types: [completed]
   schedule:
-    - cron: '40 9,13 * * 1-5'
+    - cron: '40 7-14 * * 1-5'
   workflow_dispatch:
   # claude/** dalında betik değişince gerçek veriyle KURU koşu (yazmaz, raporlar).
   push:
