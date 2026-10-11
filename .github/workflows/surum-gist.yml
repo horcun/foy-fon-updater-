@@ -1,0 +1,51 @@
+name: Android sürüm Gist'i
+
+# Android yayını canlıya çıkınca FÖY'ün sürüm kontrolü Gist'inde yalnız
+# minimum_version_android'i ileri çeker (kural: surum_gist.py başlığı).
+# Mergen tetikler (FinansalOzgurluk CLAUDE.md §1 mağaza işletmesi, 11 Eki 2026).
+on:
+  workflow_dispatch:
+    inputs:
+      surum:
+        description: 'Yeni minimum_version_android (X.Y.Z). Boşsa yalnız okur.'
+        required: false
+        type: string
+      yaz:
+        description: 'İşaretli değilse KURU (yazmaz)'
+        required: false
+        type: boolean
+        default: false
+  # claude/** dalında betik değişince: testler + yalnız okuma (yazmaz).
+  push:
+    branches: ['claude/**']
+    paths: ['surum_gist.py', 'test_surum_gist.py', '.github/workflows/surum-gist.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: surum-gist
+  cancel-in-progress: false
+
+jobs:
+  gist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Kurallar (ağsız test)
+        run: python -m unittest test_surum_gist -v
+      - name: Gist
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          SURUM: ${{ inputs.surum }}
+          YAZ: ${{ inputs.yaz }}
+        run: |
+          set -e
+          ARG=""
+          if [ -n "$SURUM" ]; then ARG="--surum $SURUM"; fi
+          if [ "$YAZ" = "true" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then ARG="$ARG --yaz"; fi
+          python surum_gist.py $ARG
