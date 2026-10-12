@@ -19,6 +19,8 @@ on:
   workflow_run:
     workflows: ['TEFAS Fon Güncelle']
     types: [completed]
+    # Yalnız main'deki gerçek koşu; claude/** dalındaki KURU koşu tetiklemez.
+    branches: [main]
   schedule:
     - cron: '40 7-14 * * 1-5'
   workflow_dispatch:

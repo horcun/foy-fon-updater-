@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: '10 7 * * 1-5'
   workflow_dispatch:
+  # claude/** dalında betik değişince gerçek veriyle KURU koşu (Gist'e ve
+  # arşive yazmaz; yalnız sayıları raporlar).
+  push:
+    branches: ['claude/**']
+    paths: ['update_fon.py', 'test_update_fon.py', '.github/workflows/update.yml']
 
 # Arşiv dosyalarını depoya yazabilmek için gerekli. Tanımlı olmadığında
 # GITHUB_TOKEN depo ayarına göre salt-okunur olabilir ve push SESSİZCE
@@ -17,7 +22,7 @@ permissions:
 # iki çalışma çakışır ve push çakışması yaşanır. Sıraya alınır, iptal EDİLMEZ:
 # her çalışmanın kendi gününü arşive yazması gerekiyor.
 concurrency:
-  group: tefas-fon-guncelle
+  group: ${{ github.ref == 'refs/heads/main' && 'tefas-fon-guncelle' || format('tefas-kuru-{0}', github.ref) }}
   cancel-in-progress: false
 
 jobs:
@@ -32,15 +37,24 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Kurallar (ağsız test)
+        run: python -m unittest test_update_fon -v
+
       - name: Fon fiyatlarını güncelle
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
-        run: python update_fon.py
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            python update_fon.py
+          else
+            python update_fon.py --kuru
+          fi
 
       # Bu adım Python'dan SONRA gelir. Başarısız olsa bile Gist güncellemesi
       # çoktan yapılmış olur → kullanıcının günlük fiyatları etkilenmez.
       # update_fon.py'deki hata izolasyonunun workflow tarafındaki karşılığı.
       - name: Geçmiş arşivini commit'le
+        if: github.ref == 'refs/heads/main'
         run: |
           set -e
           if [ ! -d gecmis ]; then
