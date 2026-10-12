@@ -1,0 +1,22 @@
+name: BES kaynak ölçümü (tek seferlik)
+
+# FÖY 1.7.2 — emeklilik fonu fiyatı kaynaklarda var mı (olcum_bes.py başlığı).
+# Yalnız claude/** dalında betik değişince koşar; okur, yazmaz, anahtar kullanmaz.
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['olcum_bes.py', '.github/workflows/olcum-bes.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  olc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python olcum_bes.py
